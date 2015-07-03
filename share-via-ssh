@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+
+import argparse
+import configparser
+import os
+import path
+import random
+import subprocess
+import sys
+import urllib.parse
+
+
+def main(arglist):
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser('share-via-ssh')
+    parser.add_argument('path_strs', metavar='FILE', nargs='+',
+        help='paths to files and/or directories to upload')
+    parser.add_argument('-c', '--config', metavar='...',
+        help='config file path')
+    parser.add_argument('-g', '--group', metavar='...',
+        help='existing directory to upload files to')
+    parser.add_argument('--dry-run', action='store_true',
+        help='do not actually upload anything')
+    args = parser.parse_args(arglist)
+
+    # Load config file(s)
+    config = configparser.ConfigParser()
+    if args.config:
+        config_path_obj = path.path(args.config)
+        if not config_path_obj.isfile():
+            print('error: no such config file: %s' % config_path_obj, file=sys.stderr)
+            sys.exit(1)
+        config.read([args.config])
+    else:
+        config_path_objs = [path.path(s).expand() for s in [
+            '~/.config/share-via-ssh.conf',
+            '~/.share-via-ssh.conf'
+        ]]
+        if not config.read(config_path_objs):
+            print('error: found no config file in any of the following locations:', file=sys.stderr)
+            print(file=sys.stderr)
+            for config_path_obj in config_path_objs:
+                print('- %s' % config_path_obj)
+            sys.exit(1)
+
+    # Check config file and extract settings
+    if 'share-via-ssh' not in config:
+        print('error: no [share-via-ssh] section in config file', file=sys.stderr)
+        sys.exit(1)
+    if 'host' not in config['share-via-ssh']:
+        print('error: no "host" setting in config file', file=sys.stderr)
+        sys.exit(1)
+    host = config['share-via-ssh']['host']
+    if 'base_dir' not in config['share-via-ssh']:
+        print('error: no "base_dir" setting in config file', file=sys.stderr)
+        sys.exit(1)
+    base_dir = config['share-via-ssh']['base_dir']
+    if 'base_url' not in config['share-via-ssh']:
+        print('error: no "base_url" setting in config file', file=sys.stderr)
+        sys.exit(1)
+    base_url = config['share-via-ssh']['base_url']
+
+    command_prefix = ['echo'] if args.dry_run else []
+
+    # Check paths
+    path_objs = []
+    for path_str in args.path_strs:
+        path_obj = path.path(path_str).expand()
+        if not path_obj.exists():
+            print('error: file or directory doesn\'t exist: %s' % path_obj, file=sys.stderr)
+            sys.exit(1)
+        path_objs.append(path_obj)
+
+    # Create group directory on server, if necessary
+    group = args.group
+    if not group:
+        rnd = random.SystemRandom()
+        group = "".join(rnd.choice("abcdefghijkmnpqrstuvwxyz23456789") for i in range(12))
+        group_dir = os.path.join(base_dir, group) + "/"
+        subprocess.check_call(command_prefix + ['ssh', '-q', host, 'mkdir', group_dir])
+
+    # Copy files to server
+    source_file_strs = []
+    for path_obj in path_objs:
+        source_file_strs.append(str(path_obj).replace(":", "\\:"))
+    subprocess.check_call(command_prefix + ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir])
+
+    # Show report
+    group_url = base_url + group + "/"
+    for path_obj in path_objs:
+        print(group_url + urllib.parse.quote(str(path_obj.name)))
+    print()
+    print("Directory:  \x1b[1m%s \x1b[0m" % group_url)
+    print("Add files:  \x1b[1mshare-via-ssh --group=%s\x1b[0m" % group)
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
+
