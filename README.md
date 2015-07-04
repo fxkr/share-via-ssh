@@ -3,6 +3,9 @@
 share-via-ssh is a very quick way to upload files via your SSH server
 and generate copy/pasteable links to your HTTP server.
 
+There is no custom server-side software; share-via-ssh is just a very thin
+wrapper around SSH/SCP.
+
 
 ## Usage
 
@@ -25,7 +28,7 @@ Put this in `~/.config/share_via_ssh.conf` or `~/.share_via_ssh.conf`:
 ```
 [share-via-ssh]
 host = user@example.com
-base_dir = /srv/www/paste.example.com
+base_dir = /var/www/paste.example.com
 base_url = https://paste.example.com/
 ```
 
@@ -40,7 +43,7 @@ touch /var/www/paste.example.com/index.html
 echo -e 'User-agent: *\nDisallow: /\n' > /var/www/paste.example.com/robots.txt
 ```
 
-Now configure your server. You'll probably want to:
+Now configure your web server. You'll probably want to:
 
 * disable script execution
 * disable directory listing for the main directory
@@ -56,10 +59,10 @@ Here's a sample Apache config:
         ErrorLog ${APACHE_LOG_DIR}/paste.example.com-error.log
         CustomLog ${APACHE_LOG_DIR}/paste.example.com-access.log combined
 
-        <Directory /srv/www/paste.example.com>
+        <Directory /var/www/paste.example.com>
                 Options -Indexes
         </Directory>
-        <DirectoryMatch /srv/www/paste.example.com/(.)*/>
+        <DirectoryMatch /var/www/paste.example.com/(.)*/>
                 Options +Indexes
         </DirectoryMatch>
 
