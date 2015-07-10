@@ -96,6 +96,9 @@ def main(arglist):
         source_file_strs.append(str(path_obj).replace(":", "\\:"))
     subprocess.check_call(command_prefix + ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir])
 
+    # Change permissions
+    subprocess.check_call(command_prefix + ['ssh', '-q', host, 'chmod', '-R', 'a+rX', group_dir])
+
     # Show report
     group_url = base_url + group + "/"
     for path_obj in path_objs:
