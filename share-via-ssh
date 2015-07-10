@@ -82,6 +82,8 @@ def main(arglist):
         group = "".join(rnd.choice("abcdefghijkmnpqrstuvwxyz23456789") for i in range(12))
         group_dir = os.path.join(base_dir, group) + "/"
         subprocess.check_call(command_prefix + ['ssh', '-q', host, 'mkdir', group_dir])
+    else:
+        group_dir = os.path.join(base_dir, group) + "/"
 
     # Copy files to server
     source_file_strs = []
