@@ -27,6 +27,11 @@ def main(arglist):
         help='do not actually upload anything')
     args = parser.parse_args(arglist)
 
+    # Check arguments
+    if args.group and ('/' in args.group or args.group in ('.', '..')):
+        print('error: bad group name: %s' % args.group, file=sys.stderr)
+        sys.exit(1)
+
     # Load config file(s)
     config = configparser.ConfigParser()
     if args.config:
