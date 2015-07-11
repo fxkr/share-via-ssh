@@ -6,6 +6,13 @@ and generate copy/pasteable links to your HTTP server.
 There is no custom server-side software; share-via-ssh is just a very thin
 wrapper around SSH/SCP.
 
+With the right web server configuration, it supports:
+
+* Directory listings for individual uploads only.
+* .htaccess-based expiration times.
+
+It only depends on Python 3.
+
 
 ## Usage
 
