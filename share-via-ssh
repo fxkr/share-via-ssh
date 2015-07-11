@@ -2,11 +2,15 @@
 
 import argparse
 import configparser
+import datetime
 import os
 import path
 import random
+import re
+import shlex
 import subprocess
 import sys
+import textwrap
 import urllib.parse
 
 
@@ -23,14 +27,24 @@ def main(arglist):
         help='config file path')
     parser.add_argument('-g', '--group', metavar='...',
         help='existing directory to upload files to')
+    parser.add_argument('-e', '--expire', metavar='...',
+        help='expiration time (e.g. 15m, 1h, 1d, 2w, 2015-12-24 18:00, tomorrow)')
     parser.add_argument('--dry-run', action='store_true',
         help='do not actually upload anything')
     args = parser.parse_args(arglist)
 
-    # Check arguments
+    # Check group name
     if args.group and ('/' in args.group or args.group in ('.', '..')):
         print('error: bad group name: %s' % args.group, file=sys.stderr)
         sys.exit(1)
+
+    # Parse expiration date
+    if args.expire is not None:
+        try:
+            args.expire = parse_expiration(args.expire)
+        except ValueError as e:
+            print('error: %s' % e.message, file=sys.stderr)
+            sys.exit(1)
 
     # Load config file(s)
     config = configparser.ConfigParser()
@@ -90,6 +104,18 @@ def main(arglist):
     else:
         group_dir = os.path.join(base_dir, group) + "/"
 
+    # Create .htaccess file with expiration date
+    if args.expire:
+        htaccess_path = os.path.join(group_dir, ".htaccess")
+        htaccess_text = textwrap.dedent("""\
+            RewriteEngine on
+            RewriteCond %%{TIME} >%s
+            RewriteRule "(.*)" "-" [F]
+        """).replace("\n", "\\n") % args.expire.strftime("%Y%m%d%H%M%S")
+        command = "echo %s > %s" % (shlex.quote(htaccess_text), htaccess_path)
+        subprocess.check_call(command_prefix + ['ssh', '-q', host,
+            'sh', '-c', shlex.quote(command)])
+
     # Copy files to server
     source_file_strs = []
     for path_obj in path_objs:
@@ -106,6 +132,69 @@ def main(arglist):
     print()
     print("Directory:  \x1b[1m%s \x1b[0m" % group_url)
     print("Add files:  \x1b[1mshare-via-ssh --group=%s\x1b[0m" % group)
+    if args.expire:
+        print("Expires:    %s" % args.expire.strftime("%a, %Y-%m-%d %H:%M:%M"))
+
+
+def parse_expiration(string, _now=None):
+    now = _now or datetime.datetime.today()
+
+    # Check for keywords
+    patterns = {
+        "never": None,
+        "none": None,
+        "": None,
+        "now": now,
+        "today": datetime.datetime.combine(now.date(), datetime.time(23, 59, 59)),
+        "tomorrow": datetime.datetime.combine(
+            now.date() + datetime.timedelta(days=1), datetime.time(23, 59, 59)),
+    }
+    for pattern, expiration in patterns.items():
+        if string == pattern:
+            return expiration
+
+    # Try parsing it as an absolute date/time
+    # (like "2015-12-24", "2015-12-24 18:00", "18:00")
+    patterns = {
+        "%Y%m%d%H%M%S": lambda dt: dt,
+        "%Y-%m-%d %H:%M:%S": lambda dt: dt,
+        "%Y-%m-%d %H:%M": lambda dt: dt,
+        "%Y-%m-%d %H": lambda dt: dt,
+        "%Y-%m-%d": lambda dt: dt,
+        "%Y-%m": lambda dt: dt,
+        "%Y": lambda dt: dt,
+        "%H:%M:%S": lambda dt: datetime.datetime.combine(now.date(), dt.time()),
+        "%H:%M": lambda dt: datetime.datetime.combine(now.date(), dt.time()),
+        "%H": lambda dt: datetime.datetime.combine(now.date(), dt.time()),
+    }
+    for pattern, convert in patterns.items():
+        try:
+            match = datetime.datetime.strptime(string, pattern)
+        except ValueError:
+            continue
+        else:
+            return convert(match)
+
+    # Try parsing it as a relative date
+    # (like "3h", "3h15m", "3h 15m", "1week")
+    expiration = now
+    patterns = {
+        r"(\d+) ?(?:s|secs?|seconds?)": datetime.timedelta(seconds=1),
+        r"(\d+) ?(?:m|mins?|minutes?)": datetime.timedelta(minutes=1),
+        r"(\d+) ?(?:h|hrs?|hours?)": datetime.timedelta(hours=1),
+        r"(\d+) ?(?:d|days?)": datetime.timedelta(days=1),
+        r"(\d+) ?(?:w|wks?|weeks?)": datetime.timedelta(weeks=1),
+    }
+    found_one = False
+    for pattern, multiplier in patterns.items():
+        for match in re.compile(pattern).findall(string):
+            expiration += int(match) * multiplier
+            found_one = True
+    if found_one:
+        return expiration
+
+    # None of the above methods worked
+    raise ValueError("couldn't parse expiration date: %s" % string)
 
 
 if __name__ == '__main__':

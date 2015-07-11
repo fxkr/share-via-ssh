@@ -61,9 +61,13 @@ Here's a sample Apache config:
 
         <Directory /var/www/paste.example.com>
                 Options -Indexes
+                AllowOverride FileInfo
         </Directory>
-        <DirectoryMatch /var/www/paste.example.com/(.)*/>
+        <DirectoryMatch /var/www/paste.example.com/[^/]*/>
                 Options +Indexes
+        </DirectoryMatch>
+        <DirectoryMatch /var/www/paste.example.com/[^/]*/.*/>
+                AllowOverride None
         </DirectoryMatch>
 
         <Files *>
