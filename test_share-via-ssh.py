@@ -73,7 +73,7 @@ def test_parse_expiration():
 
     try:
         parse_expiration("bad date")
-    except ValueError:
+    except share_via_ssh.ExpirationParseError:
         pass
     else:
         assert False
