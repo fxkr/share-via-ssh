@@ -90,6 +90,9 @@ def main(arglist):
         if not path_obj.exists():
             print('error: file or directory doesn\'t exist: %s' % path_obj, file=sys.stderr)
             sys.exit(1)
+        if path_obj.name in ('.htaccess', '.htpasswd'):
+            print('error: refusing to upload .htaccess/.htpasswd')
+            sys.exit(1)
         path_objs.append(path_obj)
 
     # Create group directory on server, if necessary
