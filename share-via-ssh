@@ -112,7 +112,7 @@ def main(arglist):
         htaccess_text = textwrap.dedent("""\
             RewriteEngine on
             RewriteCond %%{TIME} >%s
-            RewriteRule "(.*)" "-" [F]
+            RewriteRule "(.*)" "-" [G]
         """).replace("\n", "\\n") % args.expire.strftime("%Y%m%d%H%M%S")
         command = "echo %s > %s" % (shlex.quote(htaccess_text), htaccess_path)
         command = ['ssh', '-q', host, 'sh', '-c', shlex.quote(command)]
