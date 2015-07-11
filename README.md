@@ -37,6 +37,7 @@ Put this in `~/.config/share_via_ssh.conf` or `~/.share_via_ssh.conf`:
 host = user@example.com
 base_dir = /var/www/paste.example.com
 base_url = https://paste.example.com/
+expire = never
 ```
 
 

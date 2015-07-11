@@ -82,6 +82,15 @@ def main(arglist):
         print('error: no "base_url" setting in config file', file=sys.stderr)
         sys.exit(1)
     base_url = config['share-via-ssh']['base_url']
+    if 'expire' in config['share-via-ssh']:
+        default_expire = config['share-via-ssh']['expire']
+        try:
+            default_expire = parse_expiration(default_expire)
+        except ExpirationParseError as e:
+            print('error in config file: %s' % e, file=sys.stderr)
+            sys.exit(1)
+        if args.expire is None:
+            args.expire = default_expire
 
     # Check paths
     path_objs = []
