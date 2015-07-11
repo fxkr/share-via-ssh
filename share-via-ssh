@@ -83,8 +83,6 @@ def main(arglist):
         sys.exit(1)
     base_url = config['share-via-ssh']['base_url']
 
-    command_prefix = ['echo'] if args.dry_run else []
-
     # Check paths
     path_objs = []
     for path_str in args.path_strs:
@@ -100,7 +98,11 @@ def main(arglist):
         rnd = random.SystemRandom()
         group = "".join(rnd.choice("abcdefghijkmnpqrstuvwxyz23456789") for i in range(12))
         group_dir = os.path.join(base_dir, group) + "/"
-        subprocess.check_call(command_prefix + ['ssh', '-q', host, 'mkdir', group_dir])
+        command = ['ssh', '-q', host, 'mkdir', group_dir]
+        if args.dry_run:
+            print(" ".join(map(shlex.quote, command)))
+        else:
+            subprocess.check_call(command)
     else:
         group_dir = os.path.join(base_dir, group) + "/"
 
@@ -113,17 +115,28 @@ def main(arglist):
             RewriteRule "(.*)" "-" [F]
         """).replace("\n", "\\n") % args.expire.strftime("%Y%m%d%H%M%S")
         command = "echo %s > %s" % (shlex.quote(htaccess_text), htaccess_path)
-        subprocess.check_call(command_prefix + ['ssh', '-q', host,
-            'sh', '-c', shlex.quote(command)])
+        command = ['ssh', '-q', host, 'sh', '-c', shlex.quote(command)]
+        if args.dry_run:
+            print(" ".join(map(shlex.quote, command)))
+        else:
+            subprocess.check_call(command)
 
     # Copy files to server
     source_file_strs = []
     for path_obj in path_objs:
         source_file_strs.append(str(path_obj).replace(":", "\\:"))
-    subprocess.check_call(command_prefix + ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir])
+    command = ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir]
+    if args.dry_run:
+        print(" ".join(map(shlex.quote, command)))
+    else:
+        subprocess.check_call(command)
 
     # Change permissions
-    subprocess.check_call(command_prefix + ['ssh', '-q', host, 'chmod', '-R', 'a+rX', group_dir])
+    command = ['ssh', '-q', host, 'chmod', '-R', 'a+rX', group_dir]
+    if args.dry_run:
+        print(" ".join(map(shlex.quote, command)))
+    else:
+        subprocess.check_call(command)
 
     # Show report
     group_url = base_url + group + "/"
