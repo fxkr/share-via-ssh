@@ -14,6 +14,12 @@ import textwrap
 import urllib.parse
 
 
+try:
+    import qrcode
+except ImportError as e:
+    qrcode = None
+
+
 __version__ = '0.2.0'
 
 
@@ -31,6 +37,10 @@ def main(arglist):
         help='expiration time (e.g. 15m, 1h, 1d, 2w, 2015-12-24 18:00, tomorrow)')
     parser.add_argument('--dry-run', action='store_true',
         help='do not actually upload anything')
+    parser.add_argument('--qr', metavar='TYPE', dest='qrcode_method',
+        nargs='?', const='ascii',
+        choices=['no', 'tty', 'ascii', 'invert'],
+        help='enable QR code output and choose render method')
     args = parser.parse_args(arglist)
 
     # Check group name
@@ -74,6 +84,8 @@ def main(arglist):
         print('error: no "base_url" setting in config file', file=sys.stderr)
         sys.exit(1)
     base_url = config['share-via-ssh']['base_url']
+
+    # Expiration date
     default_expiration = None  # never
     if 'expire' in config['share-via-ssh']:
         try:
@@ -81,8 +93,6 @@ def main(arglist):
         except ExpirationParseError as e:
             print('error in config file: %s' % e, file=sys.stderr)
             sys.exit(1)
-
-    # Parse expiration date
     if args.expire is not None:
         try:
             expiration = parse_expiration(args.expire)
@@ -91,6 +101,26 @@ def main(arglist):
             sys.exit(1)
     else:
         expiration = default_expiration
+
+    # QR code method
+    default_qrcode_method = 'tty' if qrcode else None
+    if 'qr_code' in config['share-via-ssh']:
+        choices = ['no', 'tty', 'ascii', 'invert']
+        default_qrcode_method = config['share-via-ssh']['qr_code']
+        if default_qrcode_method not in choices:
+            print('error in config file: bad value for qr_code')
+            print('allowed values are: %s' % ', '.join(choices))
+            sys.exit(1)
+        if default_qrcode_method == 'no':
+            default_qrcode_method = None
+    if args.qrcode_method == 'no':
+        qrcode_method = None
+    elif args.qrcode_method:
+        qrcode_method = args.qrcode_method
+    else:
+        qrcode_method = default_qrcode_method
+    if qrcode_method and not qrcode:
+        print('warning: missing library. use "pip3 install qrcode" to fix.\n', file=sys.stderr)
 
     # Check paths
     path_objs = []
@@ -159,6 +189,27 @@ def main(arglist):
     print("Add files:  \x1b[1mshare-via-ssh --group=%s\x1b[0m" % group)
     if expiration:
         print("Expires:    %s" % expiration.strftime("%a, %Y-%m-%d %H:%M:%M"))
+
+    # Show QR code
+    if qrcode_method and qrcode:
+        print()
+
+        if len(path_objs) > 1:
+            qr_url = group_url
+        else:
+            qr_url = group_url + urllib.parse.quote(str(path_objs[0].name))
+
+        qr = qrcode.QRCode(image_factory=None)
+        qr.add_data(qr_url)
+
+        if qrcode_method == "no":
+            pass
+        elif qrcode_method == "ascii":
+            qr.print_ascii(invert=True)
+        elif qrcode_method == "invert":
+            qr.print_ascii(invert=True)
+        elif qrcode_method == "tty":
+            qr.print_tty()
 
 
 class ExpirationParseError(Exception):

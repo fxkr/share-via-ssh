@@ -37,7 +37,15 @@ Put this in `~/.config/share_via_ssh.conf` or `~/.share_via_ssh.conf`:
 host = user@example.com
 base_dir = /var/www/paste.example.com
 base_url = https://paste.example.com/
+
+# Default expiration time. Can be overridden with --expire=...
+# Valid values are: 1h30m, 14d, 2w, 2wk, 2 weeks, ...
 expire = never
+
+# Can be overridden with --qr=...
+# Valid values are: no, tty, ascii, invert
+# Requires qrcode library. "pip3 install qrcode".
+qr_code = ascii
 ```
 
 
