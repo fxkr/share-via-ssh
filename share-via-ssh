@@ -38,14 +38,6 @@ def main(arglist):
         print('error: bad group name: %s' % args.group, file=sys.stderr)
         sys.exit(1)
 
-    # Parse expiration date
-    if args.expire is not None:
-        try:
-            args.expire = parse_expiration(args.expire)
-        except ExpirationParseError as e:
-            print('error: %s' % e, file=sys.stderr)
-            sys.exit(1)
-
     # Load config file(s)
     config = configparser.ConfigParser()
     if args.config:
@@ -82,15 +74,23 @@ def main(arglist):
         print('error: no "base_url" setting in config file', file=sys.stderr)
         sys.exit(1)
     base_url = config['share-via-ssh']['base_url']
+    default_expiration = None  # never
     if 'expire' in config['share-via-ssh']:
-        default_expire = config['share-via-ssh']['expire']
         try:
-            default_expire = parse_expiration(default_expire)
+            default_expiration = parse_expiration(config['share-via-ssh']['expire'])
         except ExpirationParseError as e:
             print('error in config file: %s' % e, file=sys.stderr)
             sys.exit(1)
-        if args.expire is None:
-            args.expire = default_expire
+
+    # Parse expiration date
+    if args.expire is not None:
+        try:
+            expiration = parse_expiration(args.expire)
+        except ExpirationParseError as e:
+            print('error: %s' % e, file=sys.stderr)
+            sys.exit(1)
+    else:
+        expiration = default_expiration
 
     # Check paths
     path_objs = []
@@ -119,13 +119,13 @@ def main(arglist):
         group_dir = os.path.join(base_dir, group) + "/"
 
     # Create .htaccess file with expiration date
-    if args.expire:
+    if expiration:
         htaccess_path = os.path.join(group_dir, ".htaccess")
         htaccess_text = textwrap.dedent("""\
             RewriteEngine on
             RewriteCond %%{TIME} >%s
             RewriteRule "(.*)" "-" [G]
-        """).replace("\n", "\\n") % args.expire.strftime("%Y%m%d%H%M%S")
+        """).replace("\n", "\\n") % expiration.strftime("%Y%m%d%H%M%S")
         command = "echo %s > %s" % (shlex.quote(htaccess_text), htaccess_path)
         command = ['ssh', '-q', host, 'sh', '-c', shlex.quote(command)]
         if args.dry_run:
@@ -157,8 +157,8 @@ def main(arglist):
     print()
     print("Directory:  \x1b[1m%s \x1b[0m" % group_url)
     print("Add files:  \x1b[1mshare-via-ssh --group=%s\x1b[0m" % group)
-    if args.expire:
-        print("Expires:    %s" % args.expire.strftime("%a, %Y-%m-%d %H:%M:%M"))
+    if expiration:
+        print("Expires:    %s" % expiration.strftime("%a, %Y-%m-%d %H:%M:%M"))
 
 
 class ExpirationParseError(Exception):
