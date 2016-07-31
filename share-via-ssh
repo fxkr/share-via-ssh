@@ -23,11 +23,15 @@ except ImportError as e:
 __version__ = '0.3.0'
 
 
+# Filename for uploads from stdin
+DEFAULT_FILENAME = "index.txt"
+
+
 def main(arglist):
 
     # Parse command line arguments
     parser = argparse.ArgumentParser('share-via-ssh')
-    parser.add_argument('path_strs', metavar='FILE', nargs='+',
+    parser.add_argument('path_strs', metavar='FILE', nargs='*',
         help='paths to files and/or directories to upload')
     parser.add_argument('-c', '--config', metavar='...',
         help='config file path')
@@ -37,6 +41,8 @@ def main(arglist):
         help='expiration time (e.g. 15m, 1h, 1d, 2w, 2015-12-24 18:00, tomorrow)')
     parser.add_argument('--dry-run', action='store_true',
         help='do not actually upload anything')
+    parser.add_argument('-i', '--stdin', action='store_true',
+        help='upload text from stdin instead of files from the filesystem')
     parser.add_argument('--qr', metavar='TYPE', dest='qrcode_method',
         nargs='?', const='ascii',
         choices=['no', 'tty', 'ascii', 'invert'],
@@ -122,6 +128,18 @@ def main(arglist):
     if qrcode_method and not qrcode:
         print('warning: missing library. use "pip3 install qrcode" to fix.\n', file=sys.stderr)
 
+    # Ensure --stdin and <files> aren't used together
+    if args.stdin and args.path_strs:
+        print('error: when --stdin is used, no files can be specified')
+        sys.exit(1)
+    elif not args.stdin and not args.path_strs:
+        print('error: no files specified')
+        sys.exit(1)
+
+    # If taking data from stdin, read all before touching server so the user can safely ctrl-c
+    if args.stdin:
+        upload_text = sys.stdin.buffer.read()
+
     # Check paths
     path_objs = []
     for path_str in args.path_strs:
@@ -163,15 +181,26 @@ def main(arglist):
         else:
             subprocess.check_call(command)
 
+    # Copy text from stdin
+    if args.stdin:
+        command = ['ssh', '-o', "BatchMode yes", host, 'cat - > %s/%s' % (group_dir, DEFAULT_FILENAME)]
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE)
+        proc.stdin.write(upload_text)
+        proc.stdin.close()
+        ret = proc.wait()
+        if ret != 0:
+            raise CalledProcessError(ret, cmd, None)
+
     # Copy files to server
-    source_file_strs = []
-    for path_obj in path_objs:
-        source_file_strs.append(str(path_obj).replace(":", "\\:"))
-    command = ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir]
-    if args.dry_run:
-        print(" ".join(map(shlex.quote, command)))
     else:
-        subprocess.check_call(command)
+        source_file_strs = []
+        for path_obj in path_objs:
+            source_file_strs.append(str(path_obj).replace(":", "\\:"))
+        command = ['scp', '-q', '-r'] + source_file_strs + [host + ':' + group_dir]
+        if args.dry_run:
+            print(" ".join(map(shlex.quote, command)))
+        else:
+            subprocess.check_call(command)
 
     # Change permissions
     command = ['ssh', '-q', host, 'chmod', '-R', 'a+rX', group_dir]
@@ -182,10 +211,13 @@ def main(arglist):
 
     # Show report
     group_url = base_url + group + "/"
-    for path_obj in path_objs:
-        print(group_url + urllib.parse.quote(str(path_obj.name)))
-    print()
-    print("Directory:  \x1b[1m%s \x1b[0m" % group_url)
+    if args.stdin:
+        print("Link:       \x1b[1m%s \x1b[0m" % (group_url + urllib.parse.quote(DEFAULT_FILENAME)))
+    else:
+        for path_obj in path_objs:
+            print(group_url + urllib.parse.quote(str(path_obj.name)))
+        print()
+        print("Directory:  \x1b[1m%s \x1b[0m" % group_url)
     print("Add files:  \x1b[1mshare-via-ssh --group=%s\x1b[0m" % group)
     if expiration:
         print("Expires:    %s" % expiration.strftime("%a, %Y-%m-%d %H:%M:%M"))
