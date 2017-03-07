@@ -4,7 +4,7 @@ import argparse
 import configparser
 import datetime
 import os
-import path
+import pathlib
 import random
 import re
 import shlex
@@ -57,17 +57,17 @@ def main(arglist):
     # Load config file(s)
     config = configparser.ConfigParser()
     if args.config:
-        config_path_obj = path.path(args.config)
-        if not config_path_obj.isfile():
+        config_path_obj = pathlib.Path(args.config)
+        if not config_path_obj.is_file():
             print('error: no such config file: %s' % config_path_obj, file=sys.stderr)
             sys.exit(1)
         config.read([args.config])
     else:
-        config_path_objs = [path.path(s).expand() for s in [
+        config_path_objs = [pathlib.Path(s).expanduser() for s in [
             '~/.config/share-via-ssh.conf',
             '~/.share-via-ssh.conf'
         ]]
-        if not config.read(config_path_objs):
+        if not config.read(map(str, config_path_objs)):
             print('error: found no config file in any of the following locations:', file=sys.stderr)
             print(file=sys.stderr)
             for config_path_obj in config_path_objs:
@@ -143,7 +143,7 @@ def main(arglist):
     # Check paths
     path_objs = []
     for path_str in args.path_strs:
-        path_obj = path.path(path_str).expand()
+        path_obj = pathlib.Path(path_str).expanduser()
         if not path_obj.exists():
             print('error: file or directory doesn\'t exist: %s' % path_obj, file=sys.stderr)
             sys.exit(1)
